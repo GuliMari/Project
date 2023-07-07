@@ -11,7 +11,7 @@
  # Структура проекта
 
 
-![Image alt](https://github.com/{username}/{repository}/raw/{branch}/{path}/image.png)
+![Image alt](https://github.com/GuliMari/Project/blob/main/image_2023-07-07_23-56-42.png)
 
 Состав проекта:
 1. На `frontend` стоит сервер с настроенным как reverse proxy `Nginx`, который передает запросы на 2 сервера c установленным `Wordpress`.
