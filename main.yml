@@ -578,7 +578,7 @@
           shell: 'ssh-keyscan -H {{ backup_ip }} >> /root/.ssh/known_hosts'
         
         - name: Create rsyslog config file for borg
-          ansible.builtin.copy:
+          ansible.builtin.template:
             src: borg.conf
             dest: /etc/rsyslog.d/borg.conf      
         
