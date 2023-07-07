@@ -1,0 +1,21 @@
+[mysqld]
+default-authentication-plugin=mysql_native_password
+
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+{% if mysql_replication_role == 'master' %}
+bind-address = 0.0.0.0
+log_bin = mysql-bin
+log-bin-index = mysql-bin.index
+server_id=1
+{% endif %}
+
+{% if mysql_replication_role == 'slave' %}
+relay-log = relay-bin
+relay-log-index = relay-bin.index
+server_id=2
+{% endif %}

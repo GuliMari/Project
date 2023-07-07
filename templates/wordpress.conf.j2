@@ -1,0 +1,11 @@
+Listen 8080
+<VirtualHost *:8080>
+  ServerName tw4.local
+  DocumentRoot /var/www/html/
+  ErrorLog /var/log/httpd/wordpress/error.log
+	CustomLog /var/log/httpd/wordpress/access.log combined
+</VirtualHost>
+
+<Directory /var/www/html/>
+    AllowOverride All
+</Directory>

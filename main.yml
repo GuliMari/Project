@@ -1,0 +1,491 @@
+---
+
+- hosts: all
+  tags: pre
+  gather_facts: true
+  become: true
+  pre_tasks:
+    - name: Set timezone to Europe/Moscow
+      timezone: 
+        name: Europe/Moscow
+      
+    - name: Restart chronyd
+      service:
+        name: chronyd
+        state: restarted
+        enabled: true
+
+    - name: install updates
+      yum:
+        update_only: yes
+        update_cache: yes
+      changed_when: false
+
+    - name: disable SELinux
+      ansible.posix.selinux:
+        state: disabled
+
+    - name: disable firewall
+      systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+    
+    - name: Copy hosts to all servers
+      copy:
+        src: hosts
+        dest: /etc/
+#  tasks:
+#    - name: allow established and related connections
+#      iptables:
+#        chain: INPUT
+#        ctstate: ESTABLISHED,RELATED
+#        jump: ACCEPT
+#    
+#    - name: allow icmp
+#      iptables:
+#        chain: INPUT
+#        protocol: icmp
+#        jump: ACCEPT
+#    
+#    - name: allow loopback
+#      iptables:
+#        chain: INPUT
+#        in_interface: lo
+#        jump: ACCEPT
+#    
+#    - name: add tcp ports
+#      iptables:
+#        chain: INPUT
+#        protocol: tcp
+#        destination_port: "{{ item }}"
+#        ctstate: NEW
+#        jump: ACCEPT
+#      loop:
+#        - "80"
+#        - "443"
+#        - "22"
+#        - "53"
+#    
+#    - name: Set the policy for the input chain to drop
+#      iptables:
+#        chain: INPUT
+#        policy: DROP
+
+#- hosts: front
+#  tags: ssl
+#  gather_facts: true
+#  become: true
+#  vars:
+#    domain_name: tw4.local
+#    certificate_path: /tmp/ssl/ssl_certificate.crt
+#    private_key_path: /tmp/ssl/ssl_private_key.key
+#  tasks:    
+#    - name: Create SSL directory
+#      file:
+#        path: /tmp/ssl
+#        state: directory
+#
+#    - name: Generate private key
+#      command: openssl genpkey -algorithm RSA -out {{ private_key_path }} -pkeyopt rsa_keygen_bits:2048
+#
+#    - name: Generate CSR
+#      command: openssl req -new -key {{ private_key_path }} -out csr.csr -subj "/CN={{ domain_name }}"
+#
+#    - name: Generate self-signed certificate
+#      command: openssl req -x509 -sha256 -days 365 -key {{ private_key_path }} -in csr.csr -out {{ certificate_path }}
+
+
+- hosts: front
+  tags: front
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Install epel-release
+      yum: 
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+    
+    - name: Install Nginx package
+      yum:
+        name: nginx
+        state: present
+    
+    - name: Configure Nginx proxy server
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+      
+    - name: Configure Nginx proxy server
+      template:
+        src: upstream.conf.j2
+        dest: /etc/nginx/conf.d/upstream.conf
+    #- name: Copy SSL certificate
+    #  copy:
+    #    src: /tmp/ssl/ssl_certificate.crt
+    #    dest: /etc/nginx/ssl_certificate.crt
+    #    remote_src: true
+#
+    #- name: Copy SSL private key
+    #  copy:
+    #    src: /tmp/ssl/ssl_private_key.key
+    #    dest: /etc/nginx/ssl_private_key.key
+    #    remote_src: true
+
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+
+    - name: Start and enable Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+- hosts: db
+  tags: db
+  gather_facts: true
+  become: true
+  vars:
+    mysql_root_password: Otus2023!
+    mysql_user: replica
+    mysql_user_password: OtUs2023!
+    wp_user: wp
+    wp_user_password: otus!2023
+    db_name: wordpress
+    db_host: 192.168.56.20
+  tasks:
+    - name: Install Mysql
+      tags: mysql 
+      block:
+        - name: download Oracle MySQL 8.0 repository
+          ansible.builtin.raw: rpm -Uvh https://repo.mysql.com/mysql80-community-release-el7-7.noarch.rpm
+          ignore_errors: true
+    
+        - name: import a gpg-key from a url
+          ansible.builtin.rpm_key:
+            state: present
+            key: https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+        
+        - name: install mysql
+          yum:
+            name:
+              - mysql-community-server*
+              - MySQL-python
+            state: present
+        
+        - name: copy mysql configuration file
+          template:
+            src: my.cnf.j2
+            dest: /etc/my.cnf
+            owner: root
+            group: root
+            mode: 0644
+            backup: true
+     
+        - name: enable mysql
+          systemd:
+            name: mysqld
+            state: restarted
+            enabled: true
+        
+        - name: get default temporary root password
+          shell: "grep 'A temporary password is generated for root@localhost' /var/log/mysqld.log | awk -F ' ' '{print $(NF)}'"
+          register: mysql_temp_password
+        
+        - name: update root password
+          command: mysql --user root --password={{ mysql_temp_password.stdout }} --connect-expired-password --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ mysql_root_password }}';"
+        
+        - name: remove all anonymous user accounts
+          mysql_user:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            name: ''
+            host_all: true
+            state: absent
+        
+        - name: remove mysql test database
+          mysql_db:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            name: test
+            state: absent
+
+        - name: Configure WordPress database
+          mysql_db:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            name:  "{{ db_name }}"
+            state: present
+     
+        - name: Configure WordPress database user
+          mysql_user:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"      
+            name: "{{ wp_user }}"
+            password: "{{ wp_user_password }}"
+            priv: 'wordpress.*:ALL'
+            host: '%'
+            state: present    
+
+    - name: Configure Replication
+      tags: repl
+      block:
+        - name: create mysql client user for replication
+          mysql_user:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            name: "{{ mysql_user }}"
+            password: "{{ mysql_user_password }}"
+            priv: '*.*:REPLICATION SLAVE'
+            state: present
+            host: '%'
+          no_log: true
+          when: mysql_replication_role == 'master'
+
+        - name: check master replication status
+          mysql_replication:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            mode: getmaster
+          delegate_to: "{{ hostvars['mysql1'].ansible_host }}"
+          register: master
+          when: mysql_replication_role == 'slave'
+        
+        - name: stop replication
+          mysql_replication:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            mode: resetslave
+          when: mysql_replication_role == 'slave'
+        
+        - name: configure replication on the slave
+          mysql_replication:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            mode: changemaster
+            master_host: "{{ hostvars['mysql1'].ansible_host }}"
+            master_user: '{{ mysql_user }}'
+            master_password: '{{ mysql_user_password }}'
+            master_log_file: '{{ master.File }}'
+            master_log_pos: '{{ master.Position }}'
+          when: mysql_replication_role == 'slave'
+        
+        - name: start replication
+          mysql_replication:
+            login_user: root
+            login_password: "{{ mysql_root_password }}"
+            mode: startslave
+          when: mysql_replication_role == 'slave'    
+
+    - name: Configure Keepalived
+      tags: keep
+      block:
+        - name: Install Keepalived package
+          yum:
+            name: keepalived
+            state: latest
+            update_cache: true
+     
+        - name: Copy ifcfg-eth1 config 
+          template: 
+            src: eth1.j2 
+            dest: /etc/sysconfig/network-scripts/ifcfg-eth1 
+            owner: root 
+            group: root 
+            mode: 0600
+     
+        - name: Create new file VIP 
+          template:
+            src: eth1.vip.j2 
+            dest: /etc/sysconfig/network-scripts/ifcfg-eth1:1 
+            owner: root 
+            group: root 
+            mode: 0600
+             
+        - name: Copy Keepalived configuration file
+          template:
+            src: keepalived.conf.j2  
+            dest: /etc/keepalived/keepalived.conf
+          tags: ka
+        - name: Copy script
+          template:
+            src: mysql.sh 
+            dest: /etc/keepalived/
+            mode: 0755
+          tags: ka
+
+        - name: Restart keepalived
+          systemd:
+            name: keepalived
+            state: restarted
+            enabled: true
+          tags: ka
+       
+
+
+- hosts: back
+  tags: back
+  gather_facts: true
+  become: true
+  vars:
+    wp_user: wp
+    wp_user_password: otus!2023
+    db_name: wordpress
+    db_host: 192.168.56.20
+  tasks:
+    - name: download Oracle MySQL 8.0 repository
+      ansible.builtin.raw: rpm -Uvh https://repo.mysql.com/mysql80-community-release-el7-7.noarch.rpm
+      ignore_errors: true
+
+    - name: import a gpg-key from a url
+      ansible.builtin.rpm_key:
+        state: present
+        key: https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+    
+    - name: install mysql
+      yum:
+        name:
+          - mysql-community-client
+          - MySQL-python
+        state: present
+        
+    - name: Install the remi
+      yum:
+        name: http://rpms.remirepo.net/enterprise/remi-release-7.rpm
+        state: latest
+    
+    - name: Install required packages
+      yum:
+        name: 
+          - httpd
+          - php74-php 
+          - php74-php-common
+          - php74-php-fpm 
+          - php74-php-mysqlnd 
+          - php74-php-opcache 
+          - php74-php-xml 
+          - php74-php-gd 
+          - php74-php-pear 
+          - php74-php-json
+          - php74-php-mbstring
+        state: present  
+    
+    - name: Configure Apache virtual host for WordPress
+      template:
+        src: wordpress.conf.j2
+        dest: /etc/httpd/conf.d/wordpress.conf
+ 
+    - name: Create folders for wordpress logs
+      file: 
+        path: /var/log/httpd/wordpress
+        state: directory
+        owner: root 
+        group: root 
+        mode: 0755  
+    
+    - name: unarchive wordpress
+      unarchive:
+        src: http://wordpress.org/latest.tar.gz
+        dest: /tmp/
+        remote_src: True
+       
+    - name: Copy wordpress
+      copy:
+         src: /tmp/wordpress/
+         dest: /var/www/html/
+         remote_src: true
+        
+    #- name: Create the WordPress configuration file
+    #  template:
+    #    src: wp-config.php.j2
+    #    dest: /var/www/html/wp-config.php 
+    #  tags: conf
+    - name: Set ownership and permissions for WordPress files
+      file:
+        path: /var/www/html/
+        owner: apache
+        group: apache
+        mode: "u+x,g+x,o+x"
+        recurse: true
+        
+    - name: Restart Apache
+      service:
+         name: httpd
+         state: restarted        
+         enabled: true 
+      
+
+
+
+
+#    - name: Configure DRBD
+#      tags: drbd
+#      block:
+#        - name: Install epel-release
+#          yum: 
+#            name: https://www.elrepo.org/elrepo-release-7.el7.elrepo.noarch.rpm
+#            state: present
+#        
+#        - name: Install required packages
+#          yum:
+#            name:
+#              - drbd84-utils
+#              - kmod-drbd84
+#            state: present
+#     
+#        - name: Configure DRBD resource
+#          template:
+#            src: drbd_resource.j2
+#            dest: /etc/drbd.d/storage.res
+#        
+#        - name: Initialize DRBD on both servers
+#          command: drbdadm create-md storage
+#    
+#        - name: Enable and start DRBD resource
+#          command: drbdadm up storage
+#    
+#        - name: Promote one node to primary
+#          command: drbdadm primary --force storage
+#          #when: inventory_hostname == 'wp1'
+#    
+#        - name: Configure DRBD cluster
+#          template:
+#            src: cluster.conf.j2
+#            dest: /etc/ocfs2/cluster.conf 
+
+#        - name: Configure DRBD cluster
+#          template:
+#            src: cluster.conf.j2
+#            dest: /etc/ocfs2/cluster.conf
+
+#        - name: Format DRBD resource
+#          command: mkfs.ocfs2 -L "wordpress" /dev/drbd0
+#          #when: inventory_hostname == 'wp1'
+
+#        - name: Configure DRBD cluster
+#          template:
+#            src: o2cb.j2
+#            dest: /etc/default/o2cb 
+
+#        - name: Register cluster
+#          command: o2cb register-cluster ocfs2cluster
+
+#        - name: Enable cluster
+#          systemd:
+#            name:
+#              - drbd
+#              - o2cb
+#              - ocfs2
+#            state: restarted
+#            enabled: true
+#    
+#        #- name: Mount DRBD resource
+#        #  mount:
+#        #    src: /dev/drbd0
+#        #    path: /mnt/drbd
+#        #    fstype: ext4
+#        #    state: mounted
+#        #  when: inventory_hostname == 'drbd1'
+#    

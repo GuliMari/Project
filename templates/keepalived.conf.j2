@@ -1,0 +1,36 @@
+vrrp_script chk_mysql {
+  script "/etc/keepalived/mysql.sh"
+  interval 2                     
+  weight 2
+}
+
+vrrp_instance VI_1 {
+  interface eth1                  
+  virtual_router_id 50
+
+  {% if mysql_replication_role == 'master' %}
+  state MASTER 
+  unicast_src_ip 192.168.56.11      
+  unicast_peer {
+    192.168.56.12                    
+  }
+  priority 102                     
+  {% endif %}
+  
+  {% if mysql_replication_role == 'slave' %}
+  state BACKUP
+  unicast_src_ip 192.168.56.12       
+    unicast_peer {
+  192.168.56.11                      
+  }
+  priority 101                     
+  {% endif %}
+  
+    track_script {
+       chk_mysql
+  }
+  
+  virtual_ipaddress {
+    192.168.56.20/24 dev eth1     
+  }
+}

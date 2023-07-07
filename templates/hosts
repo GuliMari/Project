@@ -1,0 +1,7 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.56.10 nginx
+192.168.56.13 wp3
+192.168.56.14 wp4
+192.168.56.11 mysql1
+192.168.56.12 mysql2
