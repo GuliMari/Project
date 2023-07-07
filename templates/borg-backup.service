@@ -1,0 +1,17 @@
+[Unit]
+Description=Borg Backup
+
+[Service]
+Type=oneshot
+
+Environment=BORG_PASSPHRASE=otus
+Environment=BORG_REPO=borg@192.168.56.10:/var/borg/backup/
+Environment=BACKUP_TARGET={{ backup_dir }}
+
+ExecStart=/bin/borg create --stats ${BORG_REPO}::etc-{now:%%Y-%%m-%%d_%%H:%%M} ${BACKUP_TARGET}
+ExecStart=/bin/borg check ${BORG_REPO}
+ExecStart=/bin/borg prune --keep-daily 90 --keep-monthly 12 --keep-yearly 1 ${BORG_REPO}
+
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=borg

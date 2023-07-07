@@ -1,0 +1,12 @@
+#!/bin/bash
+
+PATH=$PATH:/usr/local/bin
+USER=root
+TIME=$(date +"%Y%m%d")
+
+
+for s in mysql `$MYSQL -e "SHOW DATABASES LIKE '{{ backup_dir }}'"`;
+    do
+        mkdir $s;
+        /usr/bin/mysqldump --master-data=2 -u$USER -p${{ mysql_root_password }} ${{ db_name }} > ${{ backup_dir }}/${{ db_name }}-$TIME.sql;
+    done	

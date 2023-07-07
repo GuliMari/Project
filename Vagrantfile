@@ -2,7 +2,6 @@
 # vi: set ft=ruby :
 
 private_ip_base = "192.168.56.1"
-#local_ip_base = "10.10.62.1"
 
 Vagrant.configure("2") do |config|
   config.vm.box = "centos/7"
@@ -33,9 +32,13 @@ Vagrant.configure("2") do |config|
     end
   end  
 
+  config.vm.define "borg" do |borg|
+    borg.vm.hostname = "borg"
+    borg.vm.network "private_network", ip: "#{private_ip_base}5", adapter: 3
+  end
+
   config.vm.define "nginx" do |nginx|
     nginx.vm.hostname = "nginx"
-    #nginx.vm.network "private_network", ip: "#{local_ip_base}0", adapter: 2, netmask: "255.255.255.0", virtualbox__intnet: "local"
     nginx.vm.network "private_network", ip: "#{private_ip_base}0", adapter: 3
     nginx.vm.network "forwarded_port", guest: 80, host: 80
     nginx.vm.network "forwarded_port", guest: 443, host: 443
@@ -45,7 +48,7 @@ Vagrant.configure("2") do |config|
       ansible.inventory_path = "hosts"
       ansible.limit = "all"
       ansible.verbose = "v"
-      #ansible.tags = "db,back"
+      #ansible.tags = "borg,client"
     end
   end  
 end

@@ -1,4 +1,5 @@
 resource storage {
+    protocol C;
     net {
         allow-two-primaries;
         after-sb-0pri discard-zero-changes;
@@ -7,13 +8,13 @@ resource storage {
     }
     startup { become-primary-on both; }
 
-    on drbd1 {
+    on wp3 {
         meta-disk internal;
         device /dev/drbd0;
         disk /dev/sdb;
         address 192.168.56.13:7788;
-}
-    on drbd2 {
+    }
+    on wp4 {
         meta-disk internal;
         device /dev/drbd0;
         disk /dev/sdb;
