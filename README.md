@@ -8,4 +8,8 @@
 - организован централизованный сбор логов (по желанию);
 - организован backup.
 
-  
+ # Структура проекта
+
+
+![Image alt](https://github.com/{username}/{repository}/raw/{branch}/{path}/image.png)
+
