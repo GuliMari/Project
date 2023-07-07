@@ -287,8 +287,8 @@
 
         - name: copy mysqlbackup script for slave server
           template:
-            src: mysql_backup.sh
-            dest: /usr/local/bin/
+            src: mysql_backup.sh.j2
+            dest: /usr/local/bin/mysql_backup.sh
             mode: '0775'
           when: mysql_replication_role == 'slave'
         
