@@ -1,12 +1,12 @@
 #!/bin/bash
 
-PATH=$PATH:/usr/local/bin
-USER=root
-TIME=$(date +"%Y%m%d")
+DB_HOST="localhost"
+DB_USER="root"
+DB_PASSWORD="Otus2023!"
+DB_NAME="wordpress"
+BACKUP_PATH="/var/borg/backup/"
 
+backup_filename="${DB_NAME}_backup_$(date +%Y%m%d_%H%M%S).sql"
 
-for s in mysql `$MYSQL -e "SHOW DATABASES LIKE '{{ backup_dir }}'"`;
-    do
-        mkdir $s;
-        /usr/bin/mysqldump --master-data=2 -u$USER -p${{ mysql_root_password }} ${{ db_name }} > ${{ backup_dir }}/${{ db_name }}-$TIME.sql;
-    done	
+mkdir -p "${BACKUP_PATH}"
+mysqldump --user=${DB_USER} --password=${DB_PASSWORD} --host=${DB_HOST} ${DB_NAME} > ${BACKUP_PATH}/${backup_filename}"
